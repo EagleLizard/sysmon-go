@@ -11,39 +11,101 @@ import (
 
 const FLAG_ASSIGNMENT_DELIM = "="
 
-func ParseArgv(args []string) {
+type ArgvFlag struct {
+	Flag     string
+	FlagOpts []string
+}
+
+type ParsedArgv struct {
+	Cmd  string
+	Args []string
+	Opts []ArgvFlag
+}
+
+func ParseArgv(args []string) ParsedArgv {
+	var cmdToken *argvtoken.ArgvToken
+	cmdArgs := []string{}
+	flags := []ArgvFlag{}
 	tokenStack := []argvtoken.ArgvToken{}
 
 	argParser := getArgParser(args)
-	var currToken *argvtoken.ArgvToken
+	var currToken argvtoken.ArgvToken
+
+	consumeCmdOrFlag := func() {
+		var token *argvtoken.ArgvToken
+		argTokens := []argvtoken.ArgvToken{}
+		for len(tokenStack) > 0 {
+			token = &tokenStack[len(tokenStack)-1]
+			tokenStack = tokenStack[:len(tokenStack)-1]
+			if token.Kind == argvtoken.ARG {
+				argTokens = append(argTokens, *token)
+			}
+		}
+		if token == nil {
+			return
+		}
+		if token.Kind == argvtoken.CMD {
+			if cmdToken != nil {
+				panic("cmd token encountered, but cmdToken already set")
+			}
+			cmdToken = &argvtoken.ArgvToken{
+				Kind: token.Kind,
+				Val:  token.Val,
+			}
+			for len(argTokens) > 0 {
+				argToken := argTokens[len(argTokens)-1]
+				argTokens = argTokens[:len(argTokens)-1]
+				cmdArgs = append(cmdArgs, argToken.Val)
+			}
+		} else {
+			if cmdToken == nil {
+				panic(fmt.Sprintf("Unexpected Token: cmd not set. Expected %v, received: %v", argvtoken.CMD, token.Kind))
+			}
+			flagOpts := []string{}
+			for len(argTokens) > 0 {
+				argToken := argTokens[len(argTokens)-1]
+				argTokens = argTokens[:len(argTokens)-1]
+				flagOpts = append(flagOpts, argToken.Val)
+			}
+			flags = append(flags, ArgvFlag{
+				token.Val,
+				flagOpts,
+			})
+		}
+	}
+
 	for {
 		currToken = argParser()
-		if currToken == nil {
-			break
-		}
-		// fmt.Printf("kind: %v\nval: %v\n\n", currToken.Kind, currToken.Val)
 		if currToken.Kind != argvtoken.ARG {
 			/*
 				consume current stack
 			*/
-			tokenStack = tokenStack[:0]
+			consumeCmdOrFlag()
 		}
-		tokenStack = append(tokenStack, *currToken)
-		fmt.Printf("%v\n", tokenStack)
+		tokenStack = append(tokenStack, currToken)
+		if currToken.Kind == argvtoken.END {
+			break
+		}
 	}
-	for i, arg := range args {
-		fmt.Printf("%v %v\n", i, arg)
+	res := ParsedArgv{
+		Cmd:  cmdToken.Val,
+		Args: cmdArgs,
+		Opts: flags,
 	}
+	return res
 }
 
-func getArgParser(_args []string) func() *argvtoken.ArgvToken {
+func getArgParser(_args []string) func() argvtoken.ArgvToken {
 	parseState := argvparser.INIT
 	pos := 0
 	args := _args[1:]
-	var next func() *argvtoken.ArgvToken
-	next = func() *argvtoken.ArgvToken {
+	var next func() argvtoken.ArgvToken
+	next = func() argvtoken.ArgvToken {
 		if pos >= len(args) {
-			return nil
+			return argvtoken.ArgvToken{
+				Kind: argvtoken.END,
+				Val:  "",
+			}
 		}
 		currArg := args[pos]
 		switch parseState {
@@ -56,23 +118,21 @@ func getArgParser(_args []string) func() *argvtoken.ArgvToken {
 				parseState = argvparser.ARG
 			}
 		case argvparser.CMD:
-			res := &argvtoken.ArgvToken{
+			pos++
+			parseState = argvparser.INIT
+			return argvtoken.ArgvToken{
 				Kind: argvtoken.CMD,
 				Val:  currArg,
 			}
-			pos++
-			parseState = argvparser.INIT
-			return res
 		case argvparser.FLAG:
 			hasAssignment := isAssignment(currArg)
 			if !hasAssignment {
-				res := &argvtoken.ArgvToken{
+				pos++
+				parseState = argvparser.INIT
+				return argvtoken.ArgvToken{
 					Kind: argvtoken.FLAG,
 					Val:  currArg,
 				}
-				pos++
-				parseState = argvparser.INIT
-				return res
 			}
 			assignmentParts := strings.Split(currArg, FLAG_ASSIGNMENT_DELIM)
 			if len(assignmentParts) != 2 {
@@ -83,13 +143,12 @@ func getArgParser(_args []string) func() *argvtoken.ArgvToken {
 			args = args[:len(args)-1]
 			args = append(args, lhs, rhs)
 		case argvparser.ARG:
-			res := &argvtoken.ArgvToken{
+			pos++
+			parseState = argvparser.INIT
+			return argvtoken.ArgvToken{
 				Kind: argvtoken.ARG,
 				Val:  currArg,
 			}
-			pos++
-			parseState = argvparser.INIT
-			return res
 		}
 		return next() // advance to next if we didn't return already
 	}

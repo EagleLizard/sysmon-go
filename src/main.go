@@ -13,7 +13,16 @@ func main() {
 	fmt.Printf("%s\n", etc)
 	args := os.Args
 	fmt.Printf("args: %s\n", strings.Join(args, ", "))
-	argv.ParseArgv(os.Args)
+	parsedArgv := argv.ParseArgv(os.Args)
+	fmt.Printf("cmd: %s\n", parsedArgv.Cmd)
+	fmt.Printf("cmdArgs: %v\n", parsedArgv.Args)
+	fmt.Print("opts:\n")
+	for _, opt := range parsedArgv.Opts {
+		fmt.Printf("%s = %v\n", opt.Flag, opt.FlagOpts)
+		// if len(opt.FlagOpts) > 0 {
+		// 	fmt.Printf("flagOpts: %v\n", opt.FlagOpts)
+		// }
+	}
 }
 
 // func getPossibleDupes(filesPath string) string {
