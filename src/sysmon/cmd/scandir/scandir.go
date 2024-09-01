@@ -30,7 +30,16 @@ type ScanDirRes struct {
 	FileCount, DirCount         int
 }
 
-func ScanDir(dir string) ScanDirRes {
+type ScanDirCbParams struct {
+	IsDir     bool
+	IsSymLink bool
+	FullPath  string
+	stats     *os.FileInfo
+}
+
+type ScanDirCb func(scanDirCbParams ScanDirCbParams)
+
+func ScanDir(dir string, scanDirCb ScanDirCb) ScanDirRes {
 	scanDirOutDir := initScanDir()
 	filesFileName := "0_files.txt"
 	filesPath := filepath.Join(scanDirOutDir, filesFileName)

@@ -20,7 +20,7 @@ func (a ArgvTokenKind) String() string {
 	case END:
 		return "END"
 	default:
-		panic("invalid ArgvToken: " + string(a))
+		panic("invalid ArgvToken: " + string(rune(a)))
 	}
 }
 

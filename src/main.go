@@ -1,28 +1,15 @@
 package main
 
 import (
-	"fmt"
 	"os"
-	"strings"
 
 	"github.com/EagleLizard/sysmon-go/src/lib/argv"
+	"github.com/EagleLizard/sysmon-go/src/sysmon"
 )
 
 func main() {
-	etc := "hello"
-	fmt.Printf("%s\n", etc)
-	args := os.Args
-	fmt.Printf("args: %s\n", strings.Join(args, ", "))
 	parsedArgv := argv.ParseArgv(os.Args)
-	fmt.Printf("cmd: %s\n", parsedArgv.Cmd)
-	fmt.Printf("cmdArgs: %v\n", parsedArgv.Args)
-	fmt.Print("opts:\n")
-	for _, opt := range parsedArgv.Opts {
-		fmt.Printf("%s = %v\n", opt.Flag, opt.FlagOpts)
-		// if len(opt.FlagOpts) > 0 {
-		// 	fmt.Printf("flagOpts: %v\n", opt.FlagOpts)
-		// }
-	}
+	sysmon.SysmonMain(parsedArgv)
 }
 
 // func getPossibleDupes(filesPath string) string {

@@ -20,6 +20,6 @@ func (aps ArgParserState) String() string {
 	case ARG:
 		return "ARG"
 	default:
-		panic("invalid ArgParserState: " + string(aps))
+		panic("invalid ArgParserState: " + string(rune(aps)))
 	}
 }
