@@ -39,11 +39,13 @@ func ScanDirCmd(pargv argv.ParsedArgv) {
 		if params.IsSymLink {
 			return
 		}
-		lineBytes := []byte(fmt.Sprintf("%s\n", params.FullPath))
 		if params.IsDir {
-			dirsWriter.Write(lineBytes)
+			dirsWriter.Write([]byte(fmt.Sprintf("%s\n", params.FullPath)))
 		} else {
-			filesWriter.Write(lineBytes)
+			if params.Stats == nil {
+				log.Fatalf("No stats for file: %s", params.FullPath)
+			}
+			filesWriter.Write([]byte(fmt.Sprintf("%d %s\n", params.Stats.Size(), params.FullPath)))
 		}
 		pathCount++
 		if pathCount%progressMod == 0 {

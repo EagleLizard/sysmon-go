@@ -17,7 +17,7 @@ type ScanDirCbParams struct {
 	IsDir     bool
 	IsSymLink bool
 	FullPath  string
-	stats     *os.FileInfo
+	Stats     os.FileInfo
 }
 
 type ScanDirCb func(scanDirCbParams ScanDirCbParams)
@@ -49,7 +49,7 @@ func ScanDir(dir string, scanDirCb ScanDirCb) ScanDirRes {
 			IsDir:     d.IsDir(),
 			IsSymLink: lstats.Mode()&fs.ModeSymlink != 0,
 			FullPath:  fullPath,
-			stats:     &lstats,
+			Stats:     lstats,
 		})
 		return nil
 	})
