@@ -3,6 +3,7 @@ package argv
 import (
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/EagleLizard/sysmon-go/src/lib/argv/argvparser"
@@ -140,8 +141,8 @@ func getArgParser(_args []string) func() argvtoken.ArgvToken {
 			}
 			lhs := assignmentParts[0]
 			rhs := assignmentParts[1]
-			args = args[:len(args)-1]
-			args = append(args, lhs, rhs)
+			args = slices.Delete(args, pos, pos+1)
+			args = slices.Insert(args, pos, lhs, rhs)
 		case argvparser.ARG:
 			pos++
 			parseState = argvparser.INIT
