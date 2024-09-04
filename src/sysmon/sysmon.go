@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/EagleLizard/sysmon-go/src/lib/argv"
+	"github.com/EagleLizard/sysmon-go/src/sysmon/cmd/gf"
 	"github.com/EagleLizard/sysmon-go/src/sysmon/cmd/scandir"
 )
 
@@ -15,6 +16,8 @@ func SysmonMain(parsedArgv argv.ParsedArgv) {
 	case "sd":
 		fmt.Println("scanDir")
 		scandir.ScanDirCmd(parsedArgv)
+	case "gf":
+		gf.Gf()
 	default:
 		fmt.Printf("cmd not supported: \"%s\"\n", parsedArgv.Cmd)
 	}

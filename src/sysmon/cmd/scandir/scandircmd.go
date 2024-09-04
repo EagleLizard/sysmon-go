@@ -7,8 +7,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/EagleLizard/sysmon-go/src/constants"
 	"github.com/EagleLizard/sysmon-go/src/lib/argv"
+	"github.com/EagleLizard/sysmon-go/src/sysmon/cmd/scandir/finddupes"
+	"github.com/EagleLizard/sysmon-go/src/sysmon/cmd/scandir/scandirutil"
 )
 
 const progressMod = 1e4
@@ -66,19 +67,14 @@ func ScanDirCmd(pargv argv.ParsedArgv) {
 	}
 	endTime := time.Since(startTime)
 	fmt.Printf("Scan took: %s\n", endTime)
+	finddupes.FindDupes(filesPath)
 }
 
 func initScanDir() string {
 	// outDataDirPath := filepath.Join(constants.BaseDir(), constants.OutDataDirName)
 	// scanDirOutDirPath := filepath.Join(outDataDirPath, constants.ScanDirOutDirName)
-	scanDirOutDirPath := GetScanDirOutDirPath()
+	scanDirOutDirPath := scandirutil.GetScanDirOutDirPath()
 	// os.Mkdir(outDataDirPath, 0755)
 	os.MkdirAll(scanDirOutDirPath, 0755)
-	return scanDirOutDirPath
-}
-
-func GetScanDirOutDirPath() string {
-	outDataDirPath := filepath.Join(constants.BaseDir(), constants.OutDataDirName)
-	scanDirOutDirPath := filepath.Join(outDataDirPath, constants.ScanDirOutDirName)
 	return scanDirOutDirPath
 }
