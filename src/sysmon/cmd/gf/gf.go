@@ -2,6 +2,7 @@ package gf
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -10,12 +11,58 @@ import (
 
 func Gf() {
 	fmt.Println("gf")
-	fmt.Print("goFuncs:\n")
-	goFuncs()
-	fmt.Print("\ngoFuncs2:\n")
-	goFuncs2()
-	fmt.Print("\ngoFuncs3:\n")
-	goFuncs3()
+
+	// fmt.Print("goFuncs:\n")
+	// goFuncs()
+	// fmt.Print("\ngoFuncs2:\n")
+	// goFuncs2()
+	// fmt.Print("\ngoFuncs3:\n")
+	// goFuncs3()
+	fmt.Print("\ngoFuncs4:\n")
+	goFuncs4()
+}
+
+func goFuncs4() {
+	testStr := "_a_lot_of_llamas_loll_lazily_"
+	strRepN := 10
+	str := strings.Repeat(testStr, strRepN)
+	charCounts := countCharsSync(str)
+	fmt.Printf("\"%s\":\n", str)
+	printChars(charCounts)
+}
+
+func countCharsSync(str string) map[rune]int {
+	charCounts := make(map[rune]int)
+	for _, c := range str {
+		charCounts[c]++
+	}
+	return charCounts
+}
+
+func printChars(charCountMap map[rune]int) {
+	sortedKeys := sortCharMapKeys(charCountMap)
+	for _, k := range sortedKeys {
+		fmt.Printf("'%s': %d\n", string(k), charCountMap[k])
+	}
+}
+
+func sortCharMapKeys(charCountMap map[rune]int) []rune {
+	type pair struct {
+		Key rune
+		Val int
+	}
+	var pairs []pair
+	for k, v := range charCountMap {
+		pairs = append(pairs, pair{k, v})
+	}
+	sort.SliceStable(pairs, func(i, j int) bool {
+		return pairs[i].Val > pairs[j].Val
+	})
+	var sortedKeys []rune
+	for _, p := range pairs {
+		sortedKeys = append(sortedKeys, p.Key)
+	}
+	return sortedKeys
 }
 
 func goFuncs3() {
