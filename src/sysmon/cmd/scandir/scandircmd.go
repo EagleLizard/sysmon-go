@@ -5,11 +5,11 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/EagleLizard/sysmon-go/src/lib/argv"
 	"github.com/EagleLizard/sysmon-go/src/sysmon/cmd/scandir/finddupes"
 	"github.com/EagleLizard/sysmon-go/src/sysmon/cmd/scandir/scandirutil"
+	"github.com/EagleLizard/sysmon-go/src/util/chron"
 )
 
 const progressMod = 1e4
@@ -56,7 +56,7 @@ func ScanDirCmd(pargv argv.ParsedArgv) {
 
 	dirs := pargv.Args
 	fmt.Println("Scanning:")
-	startTime := time.Now()
+	sw := chron.Start()
 	for _, currDir := range dirs {
 		/*
 			TODO: make this async
@@ -65,8 +65,8 @@ func ScanDirCmd(pargv argv.ParsedArgv) {
 		ScanDir(currDir, scanDirCb)
 		fmt.Print("\n")
 	}
-	endTime := time.Since(startTime)
-	fmt.Printf("Scan took: %s\n", endTime)
+	elapsed := sw.Stop()
+	fmt.Printf("Scan took: %s\n", elapsed)
 	finddupes.FindDupes(filesPath)
 }
 

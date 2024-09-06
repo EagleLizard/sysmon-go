@@ -29,6 +29,34 @@ func goFuncs4() {
 	charCounts := countCharsSync(str)
 	fmt.Printf("\"%s\":\n", str)
 	printChars(charCounts)
+	fmt.Print("\n")
+	charCounts2 := countChars(str)
+	printChars(charCounts2)
+}
+
+func countChars(str string) map[rune]int {
+	// const maxRunningFns = 4
+
+	charMap := make(map[rune]int)
+	var charMapRu sync.Mutex
+	var wg sync.WaitGroup
+
+	_gfFn := func(c rune) {
+		charMapRu.Lock()
+		charMap[c]++
+		charMapRu.Unlock()
+	}
+
+	for _, c := range str {
+		wg.Add(1)
+		go func() {
+			defer wg.Add(-1)
+			_gfFn(c)
+		}()
+	}
+	wg.Wait()
+
+	return charMap
 }
 
 func countCharsSync(str string) map[rune]int {
