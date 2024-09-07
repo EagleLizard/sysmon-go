@@ -22,3 +22,7 @@ func (sw *Stopwatch) Reset() {
 	sw.startTime = time.Now()
 	sw.endTime = time.Time{}
 }
+
+func (sw *Stopwatch) Current() time.Duration {
+	return time.Since(sw.startTime)
+}
