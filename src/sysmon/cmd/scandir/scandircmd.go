@@ -8,6 +8,7 @@ import (
 
 	"github.com/EagleLizard/sysmon-go/src/lib/argv"
 	"github.com/EagleLizard/sysmon-go/src/sysmon/cmd/scandir/finddupes"
+	"github.com/EagleLizard/sysmon-go/src/sysmon/cmd/scandir/scandiropts"
 	"github.com/EagleLizard/sysmon-go/src/sysmon/cmd/scandir/scandirutil"
 	"github.com/EagleLizard/sysmon-go/src/util/chron"
 )
@@ -18,6 +19,9 @@ func ScanDirCmd(pargv argv.ParsedArgv) {
 	fmt.Println("ScanDirCmd()")
 
 	scanDirOutDir := initScanDir()
+
+	sdOpts := scandiropts.GetScanDirOpts(pargv)
+
 	filesFileName := "0_files.txt"
 	filesPath := filepath.Join(scanDirOutDir, filesFileName)
 	dirsFileName := "0_dirs.txt"
@@ -67,7 +71,12 @@ func ScanDirCmd(pargv argv.ParsedArgv) {
 	}
 	elapsed := sw.Stop()
 	fmt.Printf("Scan took: %s\n", elapsed)
-	finddupes.FindDupes(filesPath)
+	if sdOpts.FindDuplicates {
+		fdSw := chron.Start()
+		finddupes.FindDupes(filesPath)
+		fdElapsed := fdSw.Stop()
+		fmt.Printf("findDupes() took: %s\n", fdElapsed)
+	}
 }
 
 func initScanDir() string {
