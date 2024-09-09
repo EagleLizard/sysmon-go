@@ -20,7 +20,13 @@ type ScanDirCbParams struct {
 	Stats     os.FileInfo
 }
 
-type ScanDirCb func(scanDirCbParams ScanDirCbParams)
+/*
+return:
+
+	0 to continue
+	1 to skip
+*/
+type ScanDirCb func(scanDirCbParams ScanDirCbParams) int
 
 func ScanDir(dir string, scanDirCb ScanDirCb) ScanDirRes {
 
@@ -45,12 +51,15 @@ func ScanDir(dir string, scanDirCb ScanDirCb) ScanDirRes {
 		} else {
 			fileCount++
 		}
-		scanDirCb(ScanDirCbParams{
+		scandDirCbRes := scanDirCb(ScanDirCbParams{
 			IsDir:     d.IsDir(),
 			IsSymLink: lstats.Mode()&fs.ModeSymlink != 0,
 			FullPath:  fullPath,
 			Stats:     lstats,
 		})
+		if scandDirCbRes == 1 && d.IsDir() {
+			return filepath.SkipDir
+		}
 		return nil
 	})
 	res := ScanDirRes{

@@ -3,7 +3,7 @@ package argvtoken
 type ArgvTokenKind int
 
 const (
-	CMD = iota
+	CMD ArgvTokenKind = iota
 	FLAG
 	ARG
 	END
