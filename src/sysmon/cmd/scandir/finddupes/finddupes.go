@@ -68,13 +68,35 @@ func sortDuplicates(dupeFilePath string, totalDupeCount int) {
 		scandirutil.GetScanDirOutDirPath(),
 		scandirutil.TmpDirName,
 	)
-	fmt.Printf("%s\n", tmpDirPath)
 	err := os.RemoveAll(tmpDirPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 	os.MkdirAll(tmpDirPath, 0755)
 	writeTmpDupeSortChunks(dupeFilePath, tmpDirPath, totalDupeCount)
+
+	sortTmpDupChunks(tmpDirPath)
+}
+
+func sortTmpDupChunks(tmpDirPath string) {
+	dirEntries, err := os.ReadDir(tmpDirPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	tmpFilePaths := []string{}
+	for _, dirEntry := range dirEntries {
+		if dirEntry.IsDir() {
+			panic(fmt.Sprintf("Unexpected DirEntry in sd tmp dir: %s", dirEntry.Name()))
+		}
+		tmpFileRx := regexp.MustCompile(`^[0-9]+\.txt$`)
+		if !tmpFileRx.Match([]byte(dirEntry.Name())) {
+			panic(fmt.Sprintf("sd tmp File with invalid name: %s", dirEntry.Name()))
+		}
+		tmpFilePaths = append(tmpFilePaths, filepath.Join(tmpDirPath, dirEntry.Name()))
+	}
+	for _, tmpFilePath := range tmpFilePaths {
+		fmt.Println(tmpFilePath)
+	}
 }
 
 func writeTmpDupeSortChunks(dupeFilePath string, tmpDirPath string, totalDupeCount int) {
