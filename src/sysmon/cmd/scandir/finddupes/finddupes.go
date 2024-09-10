@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -58,6 +59,98 @@ func FindDupes(filesDataFilePath string) {
 	gfdElapsed := gfdSw.Stop()
 	fmt.Printf("getFileDupes() took: %s\n", clicolors.Peach(gfdElapsed))
 	fmt.Printf("totalDupeCount: %s\n", clicolors.Yellow_light(gfdRes.totalDupeCount))
+
+	sortDuplicates(gfdRes.dupesFilePath, gfdRes.totalDupeCount)
+}
+
+func sortDuplicates(dupeFilePath string, totalDupeCount int) {
+	tmpDirPath := filepath.Join(
+		scandirutil.GetScanDirOutDirPath(),
+		scandirutil.TmpDirName,
+	)
+	fmt.Printf("%s\n", tmpDirPath)
+	err := os.RemoveAll(tmpDirPath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	os.MkdirAll(tmpDirPath, 0755)
+	writeTmpDupeSortChunks(dupeFilePath, tmpDirPath, totalDupeCount)
+}
+
+func writeTmpDupeSortChunks(dupeFilePath string, tmpDirPath string, totalDupeCount int) {
+	chunkFileSize := 250
+
+	dupesFile, err := os.Open(dupeFilePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer dupesFile.Close()
+
+	currDupeLines := []string{}
+	tmpFileCounter := 0
+
+	// sw := chron.Start()
+	// pctSw := chron.Start()
+
+	_writeTmpFile := func() {
+		type lineSizeRec struct {
+			hash string
+			size int
+			line string
+		}
+		tmpFileName := fmt.Sprintf("%d.txt", tmpFileCounter)
+		tmpFilePath := filepath.Join(tmpDirPath, tmpFileName)
+		tmpFileCounter++
+		lineSizeRecs := []lineSizeRec{}
+		for _, line := range currDupeLines {
+			lineRx := regexp.MustCompile("^(?P<fileHash>[a-f0-9]+) (?P<fileSize>[0-9]+) .*$")
+			rxMatch := lineRx.FindStringSubmatch(line)
+			rxRes := make(map[string]string)
+			for i, name := range lineRx.SubexpNames() {
+				if i != 0 && name != "" {
+					rxRes[name] = rxMatch[i]
+				}
+			}
+			fileHash := rxRes["fileHash"]
+			fileSizeStr := rxRes["fileSize"]
+			fileSize, err := strconv.Atoi(fileSizeStr)
+			if err != nil {
+				log.Fatal(err)
+			}
+			lineSizeRecs = append(lineSizeRecs, lineSizeRec{
+				hash: fileHash,
+				size: fileSize,
+				line: line,
+			})
+		}
+		sort.SliceStable(lineSizeRecs, func(i int, j int) bool {
+			return lineSizeRecs[i].size > lineSizeRecs[j].size
+		})
+		w, err := os.Create(tmpFilePath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer w.Close()
+		for _, currRec := range lineSizeRecs {
+			w.Write([]byte(fmt.Sprintf("%s\n", currRec.line)))
+		}
+		currDupeLines = []string{}
+	}
+
+	sc := bufio.NewScanner(dupesFile)
+	for sc.Scan() {
+		line := sc.Text()
+		currDupeLines = append(currDupeLines, line)
+		if len(currDupeLines) >= chunkFileSize {
+			/*
+				write to tmp file and clear currDupeLines
+			*/
+			_writeTmpFile()
+		}
+	}
+	if len(currDupeLines) > 0 {
+		_writeTmpFile()
+	}
 }
 
 type getFileDupesRes struct {
