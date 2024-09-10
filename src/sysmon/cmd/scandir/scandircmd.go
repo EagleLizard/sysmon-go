@@ -12,6 +12,7 @@ import (
 	"github.com/EagleLizard/sysmon-go/src/sysmon/cmd/scandir/scandiropts"
 	"github.com/EagleLizard/sysmon-go/src/sysmon/cmd/scandir/scandirutil"
 	"github.com/EagleLizard/sysmon-go/src/util/chron"
+	"github.com/EagleLizard/sysmon-go/src/util/clicolors"
 )
 
 const progressMod = 1e4
@@ -97,7 +98,7 @@ func ScanDirCmd(pargv argv.ParsedArgv) {
 		fdSw := chron.Start()
 		finddupes.FindDupes(filesPath)
 		fdElapsed := fdSw.Stop()
-		fmt.Printf("findDupes() took: %s\n", fdElapsed)
+		fmt.Printf("findDupes() took: %s\n", clicolors.Chartreuse_light(fdElapsed))
 	}
 }
 

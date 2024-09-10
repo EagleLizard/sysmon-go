@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -18,6 +20,7 @@ import (
 
 	"github.com/EagleLizard/sysmon-go/src/sysmon/cmd/scandir/scandirutil"
 	"github.com/EagleLizard/sysmon-go/src/util/chron"
+	"github.com/EagleLizard/sysmon-go/src/util/clicolors"
 )
 
 const gfhCoef = float32(1) / 700
@@ -43,18 +46,74 @@ func FindDupes(filesDataFilePath string) {
 		possibleDupeCount += currFileCount
 	}
 	fmt.Printf("Possible dupes: %d\n", possibleDupeCount)
+
 	sw := chron.Start()
-	hashCountMap := getFileHashes(filesDataFilePath, sizeMap, possibleDupeCount)
+	gfhRes := getFileHashes(filesDataFilePath, sizeMap, possibleDupeCount)
 	elapsed := sw.Stop()
-	fmt.Printf("getFileHashes() took: %s\n", elapsed)
-	fmt.Printf("hashCountMap size: %d\n", len(hashCountMap))
+	fmt.Printf("getFileHashes() took: %s\n", clicolors.Chartreuse_light(elapsed))
+	fmt.Printf("hashCountMap size: %d\n", len(gfhRes.hashCountMap))
+
+	gfdSw := chron.Start()
+	gfdRes := getFileDupes(gfhRes.hashFilePath, gfhRes.hashCountMap)
+	gfdElapsed := gfdSw.Stop()
+	fmt.Printf("getFileDupes() took: %s\n", clicolors.Peach(gfdElapsed))
+	fmt.Printf("totalDupeCount: %s\n", clicolors.Yellow_light(gfdRes.totalDupeCount))
 }
 
-/*
-	59768
-*/
+type getFileDupesRes struct {
+	dupesFilePath  string
+	totalDupeCount int
+}
 
-func getFileHashes(filesDataFilePath string, sizeMap map[int]int, possibleDupeCount int) map[string]int {
+func getFileDupes(hashFilePath string, hashCountMap map[string]int) getFileDupesRes {
+	hashFile, err := os.Open(hashFilePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer hashFile.Close()
+
+	dupesFileName := "z1_dupes.txt"
+	dupesFilePath := filepath.Join(
+		scandirutil.GetScanDirOutDirPath(),
+		dupesFileName,
+	)
+	w, err := os.Create(dupesFilePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer w.Close()
+
+	totalDupeCount := 0
+
+	sc := bufio.NewScanner(hashFile)
+	for sc.Scan() {
+		line := sc.Text()
+		lineRx := regexp.MustCompile("^(?P<fileHash>[a-f0-9]+) [0-9]+ .*$")
+		rxMatch := lineRx.FindStringSubmatch(line)
+		rxRes := make(map[string]string)
+		for i, name := range lineRx.SubexpNames() {
+			if i != 0 && name != "" {
+				rxRes[name] = rxMatch[i]
+			}
+		}
+		hashCount := hashCountMap[rxRes["fileHash"]]
+		if hashCount > 1 {
+			totalDupeCount += hashCount
+			w.Write([]byte(fmt.Sprintf("%s\n", line)))
+		}
+	}
+	return getFileDupesRes{
+		dupesFilePath:  dupesFilePath,
+		totalDupeCount: totalDupeCount,
+	}
+}
+
+type getFileHashesRes struct {
+	hashFilePath string
+	hashCountMap map[string]int
+}
+
+func getFileHashes(filesDataFilePath string, sizeMap map[int]int, possibleDupeCount int) getFileHashesRes {
 	gfhMod := gfhCoef * float32(possibleDupeCount)
 	fmt.Printf("gfhMod: %v\n", gfhMod)
 	filesDataFile, err := os.Open(filesDataFilePath)
@@ -76,10 +135,33 @@ func getFileHashes(filesDataFilePath string, sizeMap map[int]int, possibleDupeCo
 
 	lineCount := 0
 	hashCountMap := make(map[string]int)
+	finishedHashCount := 0
 
 	sc := bufio.NewScanner(filesDataFile)
 
 	gfhSw := chron.Start()
+	pctSw := chron.Start()
+
+	var gfhProgressMu sync.Mutex
+	gfhProgressFn := func() {
+		/*
+			need a mutex otherwise the threads sometimes print
+				all at once when the hash write mutex unlocks
+		*/
+		gfhProgressMu.Lock()
+		defer gfhProgressMu.Unlock()
+
+		if float32(gfhSw.Current().Milliseconds()) > gfhMod {
+			// fmt.Print(".")
+			fmt.Print("⸱")
+			gfhSw.Reset()
+		}
+		if float32(pctSw.Current().Milliseconds()) > (gfhMod * 8) {
+			currPct := int(math.Round((float64(finishedHashCount) / float64(possibleDupeCount)) * 100))
+			fmt.Printf("%d", currPct)
+			pctSw.Reset()
+		}
+	}
 
 	for sc.Scan() {
 		line := sc.Text()
@@ -95,20 +177,14 @@ func getFileHashes(filesDataFilePath string, sizeMap map[int]int, possibleDupeCo
 		if err != nil {
 			log.Fatalf("Invalid size string on line %d:\n%s", lineCount, line)
 		}
-		if sizeMap[size] > 1 {
+		if size > 0 && sizeMap[size] > 1 {
 			for runningHashCount.Load() > maxRunningHashFns {
 				time.Sleep(1 * time.Millisecond)
 			}
 			runningHashCount.Add(1)
 			go func() {
-				defer func() {
-					runningHashCount.Add(-1)
-					if float32(gfhSw.Current().Milliseconds()) > gfhMod {
-						// fmt.Print(".")
-						fmt.Print("⸱")
-						gfhSw.Reset()
-					}
-				}()
+				defer runningHashCount.Add(-1)
+
 				hashStr, err := getFileHashTrunc(currPath)
 				if err != nil {
 					if errors.Is(err, os.ErrPermission) || errors.Is(err, os.ErrNotExist) {
@@ -118,9 +194,12 @@ func getFileHashes(filesDataFilePath string, sizeMap map[int]int, possibleDupeCo
 					}
 				}
 				hashMu.Lock()
+				// fmt.Printf("%x\n", hashStr)
 				hashCountMap[hashStr]++
-				w.Write([]byte(fmt.Sprintf("%x %d %s\n", hashStr, size, currPath)))
+				finishedHashCount++
+				w.Write([]byte(fmt.Sprintf("%s %d %s\n", hashStr, size, currPath)))
 				hashMu.Unlock()
+				gfhProgressFn()
 			}()
 		}
 	}
@@ -128,7 +207,10 @@ func getFileHashes(filesDataFilePath string, sizeMap map[int]int, possibleDupeCo
 		time.Sleep(10 * time.Millisecond)
 	}
 	fmt.Print("\n")
-	return hashCountMap
+	return getFileHashesRes{
+		hashFilePath: hashFilePath,
+		hashCountMap: hashCountMap,
+	}
 }
 
 func getFileHashTrunc(filePath string) (string, error) {
@@ -140,7 +222,7 @@ func getFileHashTrunc(filePath string) (string, error) {
 	   approx. 1 collision every 1 trillion (1e12) documents
 	     see: https://stackoverflow.com/a/22156338/4677252
 	*/
-	hashStr = hashStr[:5]
+	hashStr = fmt.Sprintf("%x", hashStr[:5])
 	return hashStr, nil
 }
 
