@@ -18,7 +18,7 @@ import (
 const progressMod = 1e4
 
 func ScanDirCmd(pargv argv.ParsedArgv) {
-	fmt.Println("ScanDirCmd()")
+	totalTimeSw := chron.Start()
 
 	scanDirOutDir := initScanDir()
 
@@ -100,6 +100,8 @@ func ScanDirCmd(pargv argv.ParsedArgv) {
 		fdElapsed := fdSw.Stop()
 		fmt.Printf("findDupes() took: %s\n", clicolors.Chartreuse_light(fdElapsed))
 	}
+	totalTimeElapsed := totalTimeSw.Stop()
+	fmt.Printf("Total time: %v\n", totalTimeElapsed)
 }
 
 func initScanDir() string {

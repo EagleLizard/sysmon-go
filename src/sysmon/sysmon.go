@@ -14,7 +14,6 @@ func SysmonMain(parsedArgv argv.ParsedArgv) {
 	case "scandir":
 		fallthrough
 	case "sd":
-		fmt.Println("scanDir")
 		scandir.ScanDirCmd(parsedArgv)
 	case "gf":
 		gf.Gf()

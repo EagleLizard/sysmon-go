@@ -80,6 +80,12 @@ func sortDuplicates(dupeFilePath string, totalDupeCount int) {
 }
 
 func sortTmpDupChunks(tmpDirPath string) {
+	dupesFmtFileName := "z1_dupes_fmt.txt"
+	dupesFmtFilePath := filepath.Join(
+		scandirutil.GetScanDirOutDirPath(),
+		dupesFmtFileName,
+	)
+
 	dirEntries, err := os.ReadDir(tmpDirPath)
 	if err != nil {
 		log.Fatal(err)
@@ -95,116 +101,98 @@ func sortTmpDupChunks(tmpDirPath string) {
 		}
 		tmpFilePaths = append(tmpFilePaths, filepath.Join(tmpDirPath, dirEntry.Name()))
 	}
-	var fA *os.File
-	var fB *os.File
-	var scA *bufio.Scanner
-	var scB *bufio.Scanner
-	var lineA *string
-	var lineB *string
-
-	firstScan := true
 
 	sortFileCounter := 0
 
 	for len(tmpFilePaths) > 1 {
+		faPath := tmpFilePaths[0]
+		fbPath := tmpFilePaths[1]
+		tmpFilePaths = tmpFilePaths[2:]
+		isLastSort := len(tmpFilePaths) == 0
 		sortFileName := fmt.Sprintf("a_%d.txt", sortFileCounter)
 		sortFileCounter++
-		sortFilePath := filepath.Join(tmpDirPath, sortFileName)
 
+		var sortFilePath string
+		if isLastSort {
+			sortFilePath = dupesFmtFilePath
+		} else {
+			sortFilePath = filepath.Join(tmpDirPath, sortFileName)
+		}
+
+		fa, err := os.Open(faPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		fb, err := os.Open(fbPath)
+		if err != nil {
+			log.Fatal(err)
+		}
 		w, err := os.Create(sortFilePath)
 		if err != nil {
 			log.Fatal(err)
 		}
-		defer w.Close()
+		scA := bufio.NewScanner(fa)
+		scB := bufio.NewScanner(fb)
+		scARes := scA.Scan()
+		scBRes := scB.Scan()
 
-		if fA == nil && len(tmpFilePaths) > 0 {
-			faPath := tmpFilePaths[0]
-			tmpFilePaths = tmpFilePaths[1:]
-			fA, err = os.Open(faPath)
-			if err != nil {
-				log.Fatal(err)
-			}
-			scA = bufio.NewScanner(fA)
-		}
-		if fB == nil && len(tmpFilePaths) > 0 {
-			fbPath := tmpFilePaths[0]
-			tmpFilePaths = tmpFilePaths[1:]
-			fB, err = os.Open(fbPath)
-			if err != nil {
-				log.Fatal(err)
-			}
-			scB = bufio.NewScanner(fB)
-		}
-		for firstScan || fA != nil || fB != nil {
+		for scARes || scBRes {
+			var aHashInfo hashinfo.FileHashInfo
+			var bHashInfo hashinfo.FileHashInfo
 
-			var hashInfoA hashinfo.FileHashInfo
-			var hashInfoB hashinfo.FileHashInfo
+			writeA := false
+			writeB := false
 
-			if firstScan {
-				firstScan = false
+			if scARes {
+				lineA := scA.Text()
+				aHashInfo = hashinfo.ParseHashInfo(lineA)
 			}
-
-			if scA != nil && scA.Scan() {
-				s := scA.Text()
-				lineA = &s
-			} else {
-				scA = nil
-				fA.Close()
-				fA = nil
+			if scBRes {
+				lineB := scB.Text()
+				bHashInfo = hashinfo.ParseHashInfo(lineB)
 			}
-			if scB != nil && scB.Scan() {
-				s := scB.Text()
-				lineB = &s
-			} else {
-				scB = nil
-				fB.Close()
-				fB = nil
-			}
-			if lineA != nil {
-				hashInfoA = hashinfo.ParseHashInfo(*lineA)
-			}
-			if lineB != nil {
-				hashInfoB = hashinfo.ParseHashInfo(*lineB)
-			}
-
-			var writeA bool
-			var writeB bool
-
-			if hashInfoA.Size > hashInfoB.Size {
+			if aHashInfo.Size > bHashInfo.Size {
 				writeA = true
-			} else if hashInfoA.Size < hashInfoB.Size {
+			} else if aHashInfo.Size < bHashInfo.Size {
 				writeB = true
 			} else {
-				if hashInfoA.Size > 0 && hashInfoB.Size > 0 {
-					if hashInfoA.Hash > hashInfoB.Hash {
+				if aHashInfo.Size > 0 && bHashInfo.Size > 0 {
+					if aHashInfo.Hash > bHashInfo.Hash {
 						writeA = true
-					} else if hashInfoA.Hash < hashInfoB.Hash {
+					} else if aHashInfo.Hash < bHashInfo.Hash {
 						writeB = true
 					} else {
 						writeA = true
 						writeB = true
 					}
-				} else if hashInfoA.Size > 0 {
+				} else if aHashInfo.Size > 0 {
 					writeA = true
-				} else if hashInfoB.Size > 0 {
+				} else if bHashInfo.Size > 0 {
 					writeB = true
 				}
 			}
-
 			if writeA {
-				// write
-				// fmt.Printf("%s %d\n", hashInfoA.Hash, hashInfoA.Size)
-				w.Write([]byte(fmt.Sprintf("%s %d %s\n", hashInfoA.Hash, hashInfoA.Size, hashInfoA.FilePath)))
+				w.Write([]byte(fmt.Sprintf("%s %d %s\n", aHashInfo.Hash, aHashInfo.Size, aHashInfo.FilePath)))
+				scARes = scA.Scan()
 			}
 			if writeB {
-				// write
-				// fmt.Printf("%s %d\n", hashInfoB.Hash, hashInfoB.Size)
-				w.Write([]byte(fmt.Sprintf("%s %d %s\n", hashInfoB.Hash, hashInfoB.Size, hashInfoB.FilePath)))
+				w.Write([]byte(fmt.Sprintf("%s %d %s\n", bHashInfo.Hash, bHashInfo.Size, bHashInfo.FilePath)))
+				scBRes = scB.Scan()
 			}
+		}
+		fa.Close()
+		fb.Close()
+		w.Close()
+		err = os.Remove(faPath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		err = os.Remove(fbPath)
+		if err != nil {
+			log.Fatal(err)
 		}
 		tmpFilePaths = append(tmpFilePaths, sortFilePath)
 	}
-	fmt.Printf("%v\n", tmpFilePaths)
 }
 
 func writeTmpDupeSortChunks(dupeFilePath string, tmpDirPath string, totalDupeCount int) {
