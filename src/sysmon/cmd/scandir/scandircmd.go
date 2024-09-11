@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/EagleLizard/sysmon-go/src/lib/argv"
 	"github.com/EagleLizard/sysmon-go/src/sysmon/cmd/scandir/finddupes"
@@ -42,6 +43,12 @@ func ScanDirCmd(pargv argv.ParsedArgv) {
 
 	pathCount := 0
 
+	var sdWg sync.WaitGroup
+	var countMu sync.Mutex
+	var dwMu sync.Mutex
+	var fwMu sync.Mutex
+	var outMu sync.Mutex
+
 	scanDirCb := func(params ScanDirCbParams) int {
 		if params.IsSymLink {
 			return 0
@@ -58,7 +65,9 @@ func ScanDirCmd(pargv argv.ParsedArgv) {
 			if exclude {
 				return 1
 			}
+			dwMu.Lock()
 			dirsWriter.Write([]byte(fmt.Sprintf("%s\n", params.FullPath)))
+			dwMu.Unlock()
 		} else {
 			if params.Stats == nil {
 				log.Fatalf("No stats for file: %s", params.FullPath)
@@ -66,11 +75,15 @@ func ScanDirCmd(pargv argv.ParsedArgv) {
 			if exclude {
 				return 0
 			}
+			fwMu.Lock()
 			filesWriter.Write([]byte(fmt.Sprintf("%d %s\n", params.Stats.Size(), params.FullPath)))
+			fwMu.Unlock()
 		}
 		pathCount++
 		if pathCount%progressMod == 0 {
+			outMu.Lock()
 			fmt.Print(".")
+			outMu.Unlock()
 		}
 		return 0
 	}
@@ -80,16 +93,28 @@ func ScanDirCmd(pargv argv.ParsedArgv) {
 	sw := chron.Start()
 	totalFileCount := 0
 	totalDirCount := 0
+
 	for _, currDir := range dirs {
 		/*
 			TODO: make this async
 		*/
 		fmt.Printf("%s\n", currDir)
-		sdRes := ScanDir(currDir, scanDirCb)
-		fmt.Print("\n")
-		totalFileCount += sdRes.FileCount
-		totalDirCount += sdRes.DirCount
+		sdWg.Add(1)
+		go func() {
+			defer sdWg.Done()
+			sdRes := ScanDir(currDir, scanDirCb)
+
+			countMu.Lock()
+			totalFileCount += sdRes.FileCount
+			totalDirCount += sdRes.DirCount
+			countMu.Unlock()
+
+			fmt.Print("\n")
+		}()
 	}
+
+	sdWg.Wait()
+
 	elapsed := sw.Stop()
 	fmt.Printf("# files: %d\n", totalFileCount)
 	fmt.Printf("# dirs: %d\n", totalDirCount)
