@@ -19,6 +19,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/EagleLizard/sysmon-go/src/sysmon/cmd/scandir/finddupes/hashinfo"
 	"github.com/EagleLizard/sysmon-go/src/sysmon/cmd/scandir/scandirutil"
 	"github.com/EagleLizard/sysmon-go/src/util/chron"
 	"github.com/EagleLizard/sysmon-go/src/util/clicolors"
@@ -94,9 +95,116 @@ func sortTmpDupChunks(tmpDirPath string) {
 		}
 		tmpFilePaths = append(tmpFilePaths, filepath.Join(tmpDirPath, dirEntry.Name()))
 	}
-	for _, tmpFilePath := range tmpFilePaths {
-		fmt.Println(tmpFilePath)
+	var fA *os.File
+	var fB *os.File
+	var scA *bufio.Scanner
+	var scB *bufio.Scanner
+	var lineA *string
+	var lineB *string
+
+	firstScan := true
+
+	sortFileCounter := 0
+
+	for len(tmpFilePaths) > 1 {
+		sortFileName := fmt.Sprintf("a_%d.txt", sortFileCounter)
+		sortFileCounter++
+		sortFilePath := filepath.Join(tmpDirPath, sortFileName)
+
+		w, err := os.Create(sortFilePath)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer w.Close()
+
+		if fA == nil && len(tmpFilePaths) > 0 {
+			faPath := tmpFilePaths[0]
+			tmpFilePaths = tmpFilePaths[1:]
+			fA, err = os.Open(faPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			scA = bufio.NewScanner(fA)
+		}
+		if fB == nil && len(tmpFilePaths) > 0 {
+			fbPath := tmpFilePaths[0]
+			tmpFilePaths = tmpFilePaths[1:]
+			fB, err = os.Open(fbPath)
+			if err != nil {
+				log.Fatal(err)
+			}
+			scB = bufio.NewScanner(fB)
+		}
+		for firstScan || fA != nil || fB != nil {
+
+			var hashInfoA hashinfo.FileHashInfo
+			var hashInfoB hashinfo.FileHashInfo
+
+			if firstScan {
+				firstScan = false
+			}
+
+			if scA != nil && scA.Scan() {
+				s := scA.Text()
+				lineA = &s
+			} else {
+				scA = nil
+				fA.Close()
+				fA = nil
+			}
+			if scB != nil && scB.Scan() {
+				s := scB.Text()
+				lineB = &s
+			} else {
+				scB = nil
+				fB.Close()
+				fB = nil
+			}
+			if lineA != nil {
+				hashInfoA = hashinfo.ParseHashInfo(*lineA)
+			}
+			if lineB != nil {
+				hashInfoB = hashinfo.ParseHashInfo(*lineB)
+			}
+
+			var writeA bool
+			var writeB bool
+
+			if hashInfoA.Size > hashInfoB.Size {
+				writeA = true
+			} else if hashInfoA.Size < hashInfoB.Size {
+				writeB = true
+			} else {
+				if hashInfoA.Size > 0 && hashInfoB.Size > 0 {
+					if hashInfoA.Hash > hashInfoB.Hash {
+						writeA = true
+					} else if hashInfoA.Hash < hashInfoB.Hash {
+						writeB = true
+					} else {
+						writeA = true
+						writeB = true
+					}
+				} else if hashInfoA.Size > 0 {
+					writeA = true
+				} else if hashInfoB.Size > 0 {
+					writeB = true
+				}
+			}
+
+			if writeA {
+				// write
+				// fmt.Printf("%s %d\n", hashInfoA.Hash, hashInfoA.Size)
+				w.Write([]byte(fmt.Sprintf("%s %d %s\n", hashInfoA.Hash, hashInfoA.Size, hashInfoA.FilePath)))
+			}
+			if writeB {
+				// write
+				// fmt.Printf("%s %d\n", hashInfoB.Hash, hashInfoB.Size)
+				w.Write([]byte(fmt.Sprintf("%s %d %s\n", hashInfoB.Hash, hashInfoB.Size, hashInfoB.FilePath)))
+			}
+		}
+		tmpFilePaths = append(tmpFilePaths, sortFilePath)
 	}
+	fmt.Printf("%v\n", tmpFilePaths)
 }
 
 func writeTmpDupeSortChunks(dupeFilePath string, tmpDirPath string, totalDupeCount int) {
