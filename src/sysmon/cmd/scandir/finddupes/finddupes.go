@@ -61,7 +61,10 @@ func FindDupes(filesDataFilePath string) {
 	fmt.Printf("getFileDupes() took: %s\n", clicolors.Peach(gfdElapsed))
 	fmt.Printf("totalDupeCount: %s\n", clicolors.Yellow_light(gfdRes.totalDupeCount))
 
+	sortSw := chron.Start()
 	sortDuplicates(gfdRes.dupesFilePath, gfdRes.totalDupeCount)
+	sortElapsed := sortSw.Stop()
+	fmt.Printf("sortDuplicates() took: %v\n", clicolors.Pink(sortElapsed))
 }
 
 func sortDuplicates(dupeFilePath string, totalDupeCount int) {
@@ -74,9 +77,15 @@ func sortDuplicates(dupeFilePath string, totalDupeCount int) {
 		log.Fatal(err)
 	}
 	os.MkdirAll(tmpDirPath, 0755)
+	wtSw := chron.Start()
 	writeTmpDupeSortChunks(dupeFilePath, tmpDirPath, totalDupeCount)
+	wtElapsed := wtSw.Stop()
+	fmt.Printf("writeTmpDupeSortChunks() took: %v\n", clicolors.Cyan(wtElapsed))
 
+	stSw := chron.Start()
 	sortTmpDupChunks(tmpDirPath)
+	stElapsed := stSw.Stop()
+	fmt.Printf("sortTmpDupChunks() took: %v\n", clicolors.Cyan(stElapsed))
 }
 
 func sortTmpDupChunks(tmpDirPath string) {
